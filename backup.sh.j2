@@ -1,0 +1,51 @@
+#!/bin/bash
+
+function contains() {
+    local n=$#
+    local value=${!n}
+    for ((i=1;i < $#;i++)) {
+        if [ "${!i}" == "${value}" ]; then
+            echo "y"
+            return 0
+        fi
+    }
+    echo "n"
+    return 1
+}
+
+basedir='/var/mysql_backup/'
+skip=({% for db in bb_backup_mysql_excluded %}"{{db}}"{% if not loop.last %} {% endif %}{% endfor %})
+
+if [ ! -d $basedir ]; then
+ mkdir -p $basedir
+fi
+
+echo '+++ Starting mysql backup +++'
+
+for list in `mysql -e 'show databases' | grep -v Database`
+do echo backing up $list
+
+  if [ $(contains "${skip[@]}" "${list}") != "y" ]; then
+
+    i=24
+    while [ $i -gt 0 ]
+    do
+      j=`expr $i + 1`
+      if [ -r $basedir/$list.bk.$i.gz ]
+      then
+          mv $basedir/$list.bk.$i.gz $basedir/$list.bk.$j.gz
+      fi
+
+      i=`expr $i - 1`
+    done
+
+    mysqldump --add-drop-table $list > $basedir/$list.bk.1
+    gzip $basedir/$list.bk.1
+
+  else
+    echo Skipping $list
+  fi
+
+done
+
+echo '+++ MySQL Backup Completed +++'
